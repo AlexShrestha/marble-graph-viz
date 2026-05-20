@@ -215,6 +215,14 @@ sudo systemctl status marble-graph-viz
 - The force layout spreads nodes across ±2000 units; camera starts at
   `z=2200` so it sits outside the cloud
 
+## Docs
+
+- [`docs/architecture.md`](docs/architecture.md) — deeper dive: data
+  flow, the curator/chat mutex, the CDN gotchas (single Three.js
+  instance via import map, `three-render-objects@1.40` pin, the
+  `three/webgpu` stub), the opencode flag rationale, and render tips
+  for 5K+ node KGs
+
 ## See also
 
 - [marble](https://github.com/AlexShrestha/marble) — the underlying

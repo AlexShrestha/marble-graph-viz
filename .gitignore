@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+*.log
+.DS_Store
+.backups/
+
+# In case someone points MARBLE_KG_PATH inside this repo for testing —
+# don't accidentally commit a KG file.
+data/
+*-kg.json
+user-kg.json

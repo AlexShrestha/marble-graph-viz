@@ -1,0 +1,15 @@
+{
+  "name": "marble-graph-viz",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev":   "node --watch server.mjs"
+  },
+  "dependencies": {
+    "hono": "^4.7.0",
+    "@hono/node-server": "^1.13.0",
+    "@anthropic-ai/sdk": "^0.32.0"
+  }
+}

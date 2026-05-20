@@ -1,0 +1,1059 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>marble · KG</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg: #0a0a0c;
+    --panel: rgba(16, 18, 22, 0.92);
+    --line: rgba(255,255,255,0.08);
+    --text: #e7e9ee;
+    --dim: #9aa0aa;
+
+    --c-belief:    #6cd0ff;
+    --c-preference:#88e58c;
+    --c-identity:  #ffb37a;
+    --c-insight:   #f5d76e;
+    --c-synthesis: #c180ff;
+    --c-clone:     #ff80c8;
+    --c-episode:   #6a7280;
+    --c-challenge: #ff5e7a;
+
+    --c-cleaner:   #00ffe1;
+    --c-verifier:  #ff80ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif; overflow: hidden; }
+  #graph { position: fixed; inset: 0; }
+
+  /* Top-left panel: counts + layer toggles */
+  #panel {
+    position: fixed; top: 12px; left: 12px; width: 280px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; backdrop-filter: blur(10px);
+    font-size: 12px; color: var(--text);
+  }
+  #panel h1 {
+    margin: 0 0 8px; font-size: 14px; font-weight: 700; letter-spacing: 0.4px;
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  #panel h1 small { color: var(--dim); font-weight: 400; font-size: 11px; }
+  #panel .total { color: var(--dim); margin-bottom: 8px; font-size: 11px; }
+  #panel .total b { color: var(--text); }
+
+  .layer-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 0; cursor: pointer; user-select: none;
+  }
+  .layer-row input[type="checkbox"] {
+    accent-color: var(--text); cursor: pointer; margin: 0;
+  }
+  .layer-row .dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    box-shadow: 0 0 6px currentColor;
+  }
+  .layer-row .name { flex: 1; }
+  .layer-row .count { color: var(--dim); font-variant-numeric: tabular-nums; font-size: 11px; }
+
+  /* Agents legend */
+  #agents {
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+  #agents h2 { margin: 0 0 6px; font-size: 11px; color: var(--dim); font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; }
+  .agent-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 12px; }
+  .agent-row .glow {
+    width: 10px; height: 10px; border-radius: 50%;
+    box-shadow: 0 0 8px 2px currentColor;
+    animation: agentPulse 2s ease-in-out infinite;
+  }
+  @keyframes agentPulse { 0%, 100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.4); } }
+  .agent-row .name { flex: 1; }
+  .agent-row .status { color: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; }
+
+  /* Detail side panel */
+  #detail {
+    position: fixed; top: 0; right: 0; height: 100vh; width: 380px;
+    background: var(--panel); border-left: 1px solid var(--line);
+    padding: 18px; overflow-y: auto; backdrop-filter: blur(12px);
+    transform: translateX(100%); transition: transform 0.18s ease-out;
+  }
+  #detail.open { transform: translateX(0); }
+  #detail h2 { margin: 0 0 6px; font-size: 16px; line-height: 1.3; padding-right: 24px; }
+  #detail .meta { color: var(--dim); font-size: 11px; margin-bottom: 14px; word-break: break-all; }
+  #detail dl { display: grid; grid-template-columns: 110px 1fr; gap: 4px 12px; font-size: 13px; }
+  #detail dt { color: var(--dim); }
+  #detail dd { margin: 0; word-break: break-word; }
+  #detail pre {
+    background: rgba(255,255,255,0.04); padding: 8px; border-radius: 4px;
+    font-size: 11px; max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-all;
+  }
+  #detail .close {
+    position: absolute; top: 10px; right: 10px; cursor: pointer;
+    background: none; border: 0; color: var(--dim); font-size: 22px; line-height: 1; padding: 4px;
+  }
+  #detail .close:hover { color: var(--text); }
+
+  /* Chat */
+  #chat {
+    position: fixed; bottom: 12px; left: 12px; width: 440px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    backdrop-filter: blur(12px); display: flex; flex-direction: column;
+    max-height: 50vh;
+  }
+  #chat-log {
+    padding: 12px; overflow-y: auto; font-size: 13px;
+    max-height: 35vh; min-height: 60px;
+  }
+  #chat-log .msg { margin-bottom: 8px; line-height: 1.4; }
+  #chat-log .msg.user { color: var(--c-belief); }
+  #chat-log .msg.assistant { color: var(--text); }
+  #chat-log .msg.system { color: var(--dim); font-style: italic; font-size: 11px; }
+  #chat-input {
+    border-top: 1px solid var(--line); padding: 8px;
+    display: flex; gap: 6px;
+  }
+  #chat-input input {
+    flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--line);
+    color: var(--text); padding: 7px 10px; border-radius: 4px; outline: none;
+    font: inherit;
+  }
+  #chat-input input:focus { border-color: var(--c-belief); }
+  #chat-input button {
+    background: var(--c-belief); color: var(--bg); border: 0; padding: 7px 14px;
+    border-radius: 4px; cursor: pointer; font-weight: 600; font: inherit;
+  }
+  #chat-input button:disabled { opacity: 0.5; cursor: wait; }
+
+  #loading {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: var(--bg); color: var(--dim); font-size: 14px;
+    pointer-events: none; opacity: 1; transition: opacity 0.3s;
+  }
+  #loading.hide { opacity: 0; }
+  #controls-hint {
+    position: fixed; bottom: 8px; right: 12px;
+    font-size: 11px; color: rgba(255,255,255,0.45);
+    pointer-events: none; user-select: none;
+    font-family: 'SF Mono', Monaco, monospace;
+    letter-spacing: 0.3px;
+  }
+</style>
+</head>
+<body>
+  <!-- Import map MUST come before any module imports.
+       Resolves bare `"three"` + every `three/...` subpath (webgpu, addons,
+       etc.) to a single shared URL, so 3d-force-graph and our own code
+       use the SAME Three.js instance. Without the `"three/": ".../"`
+       prefix mapping, dynamic imports of `three/webgpu` from the lib fail. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three":        "https://esm.sh/three@0.149.0",
+      "three/webgpu": "/three-webgpu-stub.js",
+      "three/":       "https://esm.sh/three@0.149.0/"
+    }
+  }
+  </script>
+
+  <div id="graph"></div>
+  <div id="loading">loading KG…</div>
+  <div id="controls-hint">DRAG to rotate · SCROLL to zoom · RIGHT-DRAG to pan</div>
+
+  <div id="panel">
+    <h1>marble<small id="hint">click a node</small></h1>
+    <div class="total"><b id="total-visible">…</b> visible / <b id="total-all">…</b> total</div>
+
+    <div id="layers"></div>
+
+    <div id="agents">
+      <h2>agents</h2>
+      <div class="agent-row">
+        <span class="glow" style="color: var(--c-cleaner)"></span>
+        <span class="name">cleaner</span>
+        <span class="status" id="cleaner-status">idle</span>
+      </div>
+      <div class="agent-row">
+        <span class="glow" style="color: var(--c-verifier)"></span>
+        <span class="name">verifier</span>
+        <span class="status" id="verifier-status">idle</span>
+      </div>
+      <div id="auto-state" style="margin-top:6px; font-size:11px; color:var(--dim); display:flex; justify-content:space-between;">
+        <span id="auto-state-label">starting…</span>
+        <span id="auto-state-next" style="font-variant-numeric:tabular-nums;"></span>
+      </div>
+      <div id="curate-summary" style="margin-top:6px; font-size:11px; color:var(--dim); min-height:14px;"></div>
+      <div id="curator-runs" style="margin-top:6px; font-size:10px; color:var(--dim); max-height:120px; overflow-y:auto;"></div>
+    </div>
+  </div>
+
+  <aside id="detail">
+    <button class="close" aria-label="close">×</button>
+    <h2 id="detail-title">—</h2>
+    <div class="meta" id="detail-id"></div>
+    <dl id="detail-fields"></dl>
+    <h3 style="font-size:11px;color:var(--dim);margin-top:14px;text-transform:uppercase;letter-spacing:0.5px;">raw fact</h3>
+    <pre id="detail-raw"></pre>
+  </aside>
+
+  <div id="chat">
+    <div id="chat-log">
+      <div class="msg system">Ask about yourself. The KG is the only context.</div>
+    </div>
+    <form id="chat-input">
+      <input id="chat-text" autocomplete="off" placeholder="who am I, really?" />
+      <button type="submit">send</button>
+    </form>
+  </div>
+
+<script type="module">
+// The import map above resolves bare `"three"` to a single URL so the lib
+// and our code share ONE Three.js instance. `?external=three` on the lib
+// import tells esm.sh to not bundle its own copy of three; the browser
+// then loads three exactly once via the import map.
+import * as THREE from 'three';
+// `?deps=three-render-objects@1.40.0` pins the transitive renderer to 1.40
+// (1.41+ requires a `Timer` export from `three` that esm.sh's three bundle
+// doesn't ship, breaking module resolution).
+import ForceGraph3D from 'https://esm.sh/3d-force-graph@1.73.4?external=three&deps=three-render-objects@1.40.0';
+
+// ─── Layer config ──────────────────────────────────────────────────────────
+const LAYERS = [
+  { key: 'episode',    layer: 'L0',   label: 'episodes',    color: '#6a7280', defaultOn: false },
+  { key: 'belief',     layer: 'L1',   label: 'beliefs',     color: '#6cd0ff', defaultOn: true },
+  { key: 'preference', layer: 'L1',   label: 'preferences', color: '#88e58c', defaultOn: true },
+  { key: 'identity',   layer: 'L1',   label: 'identities',  color: '#ffb37a', defaultOn: true },
+  { key: 'insight',    layer: 'L1.5', label: 'insights',    color: '#f5d76e', defaultOn: true },
+  { key: 'synthesis',  layer: 'L2',   label: 'syntheses',   color: '#c180ff', defaultOn: true },
+  { key: 'clone',      layer: 'L3',   label: 'clones',      color: '#ff80c8', defaultOn: true },
+];
+const COLOR_BY_GROUP = Object.fromEntries(LAYERS.map(l => [l.key, l.color]));
+const CHALLENGE_COLOR = '#ff5e7a';
+const VISIBLE = new Set(LAYERS.filter(l => l.defaultOn).map(l => l.key));
+
+const LINK_COLORS = {
+  reinforces:  'rgba(193,128,255,0.55)',
+  contradicts: 'rgba(255,94,122,0.7)',
+  supports:    'rgba(245,215,110,0.5)',
+  topic:       'rgba(255,255,255,0.08)',
+};
+
+let Graph;
+let allData = { nodes: [], links: [] };
+let scene = null;        // THREE.Scene from the Graph
+let fires = [];          // active traveling signals
+let halos = [];          // active pulse halos on nodes
+const MAX_FIRES = 40;    // concurrent in-flight signals
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+async function init() {
+  const res = await fetch('/api/graph');
+  allData = await res.json();
+
+  buildLayerControls();
+  document.getElementById('total-all').textContent = allData.nodes.length;
+
+  Graph = ForceGraph3D()(document.getElementById('graph'))
+    .backgroundColor('#0e1230')              // lighter deep-blue, not pure black
+    // Big spheres — was 5, now 12 so each node is a clearly visible star
+    .nodeRelSize(12)
+    .nodeVal(n => Math.max(2, n.val || 1))
+    .nodeColor(n => {
+      if (n.__fire_until && performance.now() < n.__fire_until) {
+        return n.__fire_color || '#ffffff';
+      }
+      if (n.challenge) return CHALLENGE_COLOR;
+      return COLOR_BY_GROUP[n.group] || '#888';
+    })
+    .nodeOpacity(1.0)
+    .nodeResolution(8)         // lower-poly spheres for perf with 7K nodes
+    .nodeLabel(n => labelHtml(n))
+    .linkColor(l => LINK_COLORS[l.kind] || 'rgba(255,255,255,0.06)')
+    .linkOpacity(0.55)
+    .linkWidth(l => l.kind === 'contradicts' ? 1.5 : 0.6)
+    .linkDirectionalParticles(l => (l.kind === 'reinforces' || l.kind === 'contradicts' || l.kind === 'supports') ? 2 : 0)
+    .linkDirectionalParticleWidth(1.4)
+    .linkDirectionalParticleSpeed(0.005)
+    .linkDirectionalParticleColor(l => l.kind === 'contradicts' ? CHALLENGE_COLOR : (l.kind === 'supports' ? '#f5d76e' : '#c180ff'))
+    .onNodeClick(node => {
+      showDetail(node);
+      const distance = 80;
+      const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
+      Graph.cameraPosition(
+        { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
+        node,
+        800,
+      );
+    })
+    // No auto zoom-to-fit — with 7.5K nodes it pulls the camera so far back
+    // that every sprite collapses to a pixel. Keep camera at a fixed, close
+    // distance so the user sees the rich star-cluster look up close. They
+    // can scroll-zoom to explore.
+    ;
+
+  // Stronger repulsion + longer links so the cluster expands and you can see
+  // structure (and there's empty space to drag the camera in).
+  Graph.d3Force('charge').strength(-220);
+  Graph.d3Force('link').distance(l => l.kind === 'topic' ? 60 : 35);
+  Graph.cameraPosition({ x: 0, y: 0, z: 2200 });
+
+  // Pull the live THREE scene so we can inject signal-particles + starfield.
+  scene = Graph.scene();
+
+  // Denser starfield (10k stars) — the dominant atmospheric layer
+  addStarfield(scene, 10000);
+  // Plus a midground layer of brighter "near" stars
+  addStarfield(scene, 800, { rMin: 600, rMax: 1200, sizeMin: 4, sizeMax: 8, brighter: true });
+
+  // Multiple stacked nebula clouds for depth
+  addNebulaHaze(scene);
+
+  // Auto-orbit disabled until we confirm node rendering is stable.
+  // startAutoOrbit();
+
+  applyFilter();
+  document.getElementById('loading').classList.add('hide');
+
+  // Kick off the neuron-firing simulation
+  startFiringLoop();
+  startTickLoop();
+}
+
+// Slow continuous orbit of the camera unless the user is dragging.
+function startAutoOrbit() {
+  let lastInteract = 0;
+  const dom = document.getElementById('graph');
+  ['pointerdown', 'wheel', 'touchstart'].forEach(evt =>
+    dom.addEventListener(evt, () => lastInteract = performance.now(), { passive: true })
+  );
+  const radius = () => {
+    const pos = Graph.cameraPosition();
+    return Math.hypot(pos.x, pos.y, pos.z) || 800;
+  };
+  let angle = 0;
+  function tick() {
+    const now = performance.now();
+    const idle = now - lastInteract > 1800;
+    if (idle) {
+      angle += 0.0010;       // slow orbit speed
+      const r = radius();
+      const y = Graph.cameraPosition().y;
+      Graph.cameraPosition({
+        x: r * Math.cos(angle),
+        y: y * 0.999 + 0.05,   // very gentle vertical drift
+        z: r * Math.sin(angle),
+      }, undefined, 0);
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ─── Galaxy aesthetic ──────────────────────────────────────────────────────
+
+function addStarfield(scene, count, opts = {}) {
+  const rMin = opts.rMin ?? 1500;
+  const rMax = opts.rMax ?? 4500;
+  const sizeMin = opts.sizeMin ?? 1.2;
+  const sizeMax = opts.sizeMax ?? 3.5;
+  const brighter = opts.brighter ?? false;
+  const geom = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const sizes = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    const r = rMin + Math.random() * (rMax - rMin);
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+    positions[i * 3 + 2] = r * Math.cos(phi);
+    const tint = Math.random();
+    const bright = brighter ? 1.0 : (0.45 + Math.random() * 0.55);
+    if (tint < 0.65) { colors[i*3]=bright; colors[i*3+1]=bright; colors[i*3+2]=bright; }
+    else if (tint < 0.8) { colors[i*3]=bright * 0.7; colors[i*3+1]=bright * 0.85; colors[i*3+2]=bright; }
+    else if (tint < 0.92) { colors[i*3]=bright; colors[i*3+1]=bright * 0.85; colors[i*3+2]=bright * 0.6; }
+    else { colors[i*3]=bright; colors[i*3+1]=bright * 0.5; colors[i*3+2]=bright * 0.7; }
+    sizes[i] = sizeMin + Math.random() * (sizeMax - sizeMin);
+  }
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const starTex = makeStarSpriteTexture();
+  const mat = new THREE.PointsMaterial({
+    size: (sizeMin + sizeMax) / 2,
+    sizeAttenuation: true,
+    vertexColors: true,
+    map: starTex,
+    transparent: true,
+    opacity: brighter ? 1.0 : 0.85,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  scene.add(new THREE.Points(geom, mat));
+}
+
+function makeStarSpriteTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0,   'rgba(255,255,255,1)');
+  grad.addColorStop(0.2, 'rgba(255,255,255,0.85)');
+  grad.addColorStop(0.5, 'rgba(255,255,255,0.25)');
+  grad.addColorStop(1,   'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function addNebulaHaze(scene) {
+  // Big, opaque-enough nebula clouds positioned BEHIND the graph cloud so
+  // they form a proper backdrop. Numbers tuned for the new fixed camera
+  // distance (z ≈ 500) — previously they were too small + too transparent
+  // and got lost in the field.
+  const clouds = [
+    // [color, scale, x, y, z, opacity]
+    [0x6644ff, 6000,  -800,  -400, -1800, 0.35], // deep violet, far back-left
+    [0x3322aa, 4500,   800,   500, -1600, 0.28], // indigo, far back-right
+    [0xff4488, 3500,  -500,   400,  -800, 0.30], // hot pink, mid
+    [0xff80c0, 3000,   600,  -500,  -600, 0.25], // soft pink, mid
+    [0x44aaff, 4500,  -300,   800, -1200, 0.28], // cyan-blue, upper
+    [0x00ffe1, 2500,   600,  -200,  -300, 0.22], // teal, foreground
+    [0xc180ff, 3200,  -900,  -700,  -400, 0.26], // purple, foreground-left
+    [0xff6644, 2800,   400,   700,  -900, 0.20], // warm orange-red accent
+  ];
+  for (const [color, scale, x, y, z, opacity] of clouds) {
+    const tex = makeRadialTexture(color);
+    const mat = new THREE.SpriteMaterial({
+      map: tex, color, transparent: true, opacity,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const s = new THREE.Sprite(mat);
+    s.scale.set(scale, scale, 1);
+    s.position.set(x, y, z);
+    scene.add(s);
+  }
+}
+
+function makeRadialTexture(hex) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  const cx = 128, cy = 128;
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 128);
+  const col = new THREE.Color(hex);
+  const cs = `rgba(${(col.r*255)|0},${(col.g*255)|0},${(col.b*255)|0},`;
+  grad.addColorStop(0,    cs + '1.0)');
+  grad.addColorStop(0.3,  cs + '0.5)');
+  grad.addColorStop(0.6,  cs + '0.15)');
+  grad.addColorStop(1,    cs + '0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 256, 256);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function labelHtml(n) {
+  return `<div style="background:rgba(0,0,0,0.92);color:#fff;padding:4px 8px;border-radius:4px;font-size:12px;max-width:280px;border:1px solid rgba(255,255,255,0.15)">
+    <b>${escapeHtml(n.label || n.id)}</b><br>
+    <span style="color:#9aa">${n.layer ?? ''} · ${n.group}${n.subject && n.subject !== 'self' ? ' · ' + n.subject : ''} · str=${(n.strength ?? 0).toFixed(2)}</span>
+  </div>`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[ch]);
+}
+
+// ─── Layer toggles ─────────────────────────────────────────────────────────
+function buildLayerControls() {
+  const counts = countsByGroup(allData.nodes);
+  const root = document.getElementById('layers');
+  root.innerHTML = '';
+  for (const L of LAYERS) {
+    const row = document.createElement('label');
+    row.className = 'layer-row';
+    row.innerHTML = `
+      <input type="checkbox" ${L.defaultOn ? 'checked' : ''} data-key="${L.key}" />
+      <span class="dot" style="background:${L.color};color:${L.color}"></span>
+      <span class="name">${L.label} <small style="color:var(--dim)">${L.layer}</small></span>
+      <span class="count" data-count="${L.key}">${counts[L.key] ?? 0}</span>
+    `;
+    row.querySelector('input').addEventListener('change', (e) => {
+      const k = e.target.dataset.key;
+      if (e.target.checked) VISIBLE.add(k); else VISIBLE.delete(k);
+      applyFilter();
+    });
+    root.appendChild(row);
+  }
+}
+
+function countsByGroup(nodes) {
+  const c = {};
+  for (const n of nodes) {
+    if (n.__agent) continue;
+    c[n.group] = (c[n.group] || 0) + 1;
+  }
+  return c;
+}
+
+function applyFilter() {
+  const filteredNodes = allData.nodes.filter(n => VISIBLE.has(n.group));
+  const visibleIds = new Set(filteredNodes.map(n => n.id));
+  const filteredLinks = allData.links.filter(l => {
+    const s = typeof l.source === 'object' ? l.source.id : l.source;
+    const t = typeof l.target === 'object' ? l.target.id : l.target;
+    return visibleIds.has(s) && visibleIds.has(t);
+  });
+  Graph.graphData({ nodes: filteredNodes, links: filteredLinks });
+  document.getElementById('total-visible').textContent = filteredNodes.length;
+}
+
+// ─── Firing signals (neurons lighting up + traveling agents) ───────────────
+
+// An agent "acting" = a glowing particle launched from one node, traveling
+// along an existing link (or a straight line if none), arriving at a target,
+// and pulsing the target node briefly. The two agents (cleaner / verifier)
+// have different colors and slightly different cadences + behaviors.
+
+const AGENT_COLORS = {
+  cleaner:  { hex: 0x00ffe1, css: '#00ffe1' },
+  verifier: { hex: 0xff80ff, css: '#ff80ff' },
+};
+const ACTIONS_CLEANER = [
+  ['sweep',  'lower strength'],
+  ['sweep',  'flag challenge'],
+  ['sweep',  'normalize gap'],
+  ['skip',   'insufficient signal'],
+];
+const ACTIONS_VERIFIER = [
+  ['verify', 'bump strength'],
+  ['verify', 'evidence_count +1'],
+  ['verify', 'cross-check'],
+  ['skip',   'no recent change'],
+];
+
+function pickRandomVisibleNode() {
+  const candidates = allData.nodes.filter(n => VISIBLE.has(n.group) && typeof n.x === 'number');
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+function pickConnectedNeighbor(node) {
+  // Find an existing link from `node` to a visible neighbor, if any.
+  for (const l of allData.links) {
+    const s = typeof l.source === 'object' ? l.source : allData.nodes.find(n => n.id === l.source);
+    const t = typeof l.target === 'object' ? l.target : allData.nodes.find(n => n.id === l.target);
+    if (!s || !t) continue;
+    if (s.id === node.id && VISIBLE.has(t.group) && typeof t.x === 'number') return t;
+    if (t.id === node.id && VISIBLE.has(s.group) && typeof s.x === 'number') return s;
+  }
+  // No connected neighbor — fall back to a random visible node (signal leaps).
+  return pickRandomVisibleNode();
+}
+
+function setAgentStatus(role, text) {
+  const el = document.getElementById(role + '-status');
+  if (el) el.textContent = text;
+}
+
+// Brain-region firing: a node "ignites" along with its spatial neighborhood.
+// A central pulse, then a cascading wave through 6–10 nearest neighbors —
+// each neighbor lights up with a small delay proportional to distance.
+function spawnFiring(agent, source, target) {
+  if (!source || !scene) return;
+  if (fires.length >= MAX_FIRES * 3) return;
+  if (typeof source.x !== 'number') return;
+
+  const color = AGENT_COLORS[agent].hex;
+  const now = performance.now();
+
+  // (1) Source ignites — bright big flash with extra-large halo
+  flashNode(source, agent, 900, 1.5);
+
+  // (2) Find spatial neighbors — k closest visible nodes within radius R.
+  // Radius scaled up: with the new bigger node spacing, 120 was way too
+  // small. Now grabbing a chunky region of ~300 units.
+  const NEIGHBOR_COUNT = 10 + Math.floor(Math.random() * 6); // 10-16
+  const RADIUS_MAX = 320;
+  const neighbors = nearestVisibleNeighbors(source, NEIGHBOR_COUNT, RADIUS_MAX);
+
+  // (3) Cascade: each neighbor flashes with delay proportional to distance
+  for (let i = 0; i < neighbors.length; i++) {
+    const { node, dist } = neighbors[i];
+    const delay = 80 + dist * 1.8;                            // closer fires sooner
+    setTimeout(() => {
+      flashNode(node, agent, 700 - Math.min(400, dist), 1.0);
+      // Energy beam from source to neighbor
+      spawnArc(source, node, color, 600, 1.4);
+      // Particle stream
+      spawnParticleStream(source, node, color, 2);
+    }, delay);
+  }
+
+  // (4) If a directional target was supplied, send a bigger main beam to it
+  if (target && target !== source && typeof target.x === 'number') {
+    spawnArc(source, target, color, 900, 2.6);
+    spawnParticleStream(source, target, color, 4);
+    setTimeout(() => flashNode(target, agent, 900, 1.6), 250);
+  }
+}
+
+// Find up to k closest visible nodes within `maxRadius` of node `n` (excluding n itself)
+function nearestVisibleNeighbors(n, k, maxRadius) {
+  const candidates = [];
+  const r2 = maxRadius * maxRadius;
+  for (const o of allData.nodes) {
+    if (o === n || !VISIBLE.has(o.group)) continue;
+    if (typeof o.x !== 'number') continue;
+    const dx = o.x - n.x, dy = o.y - n.y, dz = o.z - n.z;
+    const d2 = dx*dx + dy*dy + dz*dz;
+    if (d2 > r2) continue;
+    candidates.push({ node: o, dist: Math.sqrt(d2) });
+  }
+  candidates.sort((a, b) => a.dist - b.dist);
+  return candidates.slice(0, k);
+}
+
+// Independent arc creator (reusable from cascade)
+function spawnArc(from, to, color, duration = 700, widthBoost = 1.0) {
+  const arc = makeLightning(from, to, color, widthBoost);
+  scene.add(arc.line);
+  halos.push({ mesh: arc.line, start: performance.now(), duration, kind: 'arc', material: arc.material });
+}
+
+// Streaming particles along an arc
+function spawnParticleStream(from, to, color, particleCount = 3) {
+  const now = performance.now();
+  for (let k = 0; k < particleCount; k++) {
+    const geom = new THREE.SphereGeometry(2.4 + Math.random() * 1.4, 10, 10);
+    const mat = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 1,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geom, mat);
+    scene.add(mesh);
+    fires.push({
+      from, to, mesh,
+      start: now + k * 80,
+      duration: 700 + Math.random() * 300,
+    });
+  }
+}
+
+// Build a glowing "energy beam" from a → b. Uses a TubeGeometry so it actually
+// has thickness (a thin Line was invisible at the user's zoom level).
+function makeLightning(a, b, color, widthBoost = 1.0) {
+  const mid = new THREE.Vector3((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+  const up = new THREE.Vector3(0, 1, 0);
+  const dir = new THREE.Vector3(b.x - a.x, b.y - a.y, b.z - a.z).normalize();
+  const perp = new THREE.Vector3().crossVectors(dir, up);
+  if (perp.lengthSq() < 0.01) perp.set(1, 0, 0);
+  perp.normalize().multiplyScalar(10 + Math.random() * 12);
+  mid.add(perp);
+
+  // Bezier curve with subtle jitter
+  const pts = [];
+  for (let i = 0; i <= 32; i++) {
+    const t = i / 32;
+    const u = 1 - t;
+    const j = (Math.random() - 0.5) * 1.5;
+    const x = u * u * a.x + 2 * u * t * mid.x + t * t * b.x + j;
+    const y = u * u * a.y + 2 * u * t * mid.y + t * t * b.y + j;
+    const z = u * u * a.z + 2 * u * t * mid.z + t * t * b.z + j;
+    pts.push(new THREE.Vector3(x, y, z));
+  }
+  const curve = new THREE.CatmullRomCurve3(pts);
+  // Tube radius bumped 0.9 → 3.0 so the beams are actually visible across
+  // the wide-scale graph (was thin pixel-thread before).
+  const tube = new THREE.TubeGeometry(curve, 32, 3.0 * widthBoost, 6, false);
+  const mat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.9,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(tube, mat);
+  return { line: mesh, material: mat };
+}
+
+// Flash a node — color recolor (handled by Graph.nodeColor) + bloom halos.
+// `scaleBoost` multiplies the halo sizes for "this neuron really fired hard".
+function flashNode(node, agent, ms = 500, scaleBoost = 1.0) {
+  node.__fire_until = performance.now() + ms;
+  node.__fire_color = agent === 'cleaner' ? '#00ffe1' : '#ff80ff';
+  Graph.refresh?.();
+
+  if (typeof node.x !== 'number') return;
+  const color = AGENT_COLORS[agent].hex;
+
+  // Three stacked halos for proper bloom — dramatically scaled up so the
+  // flash is unmistakable against the 7K-node star field.
+  const inner = new THREE.Mesh(
+    new THREE.SphereGeometry(22 * scaleBoost, 24, 24),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1.0,
+      blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  const mid = new THREE.Mesh(
+    new THREE.SphereGeometry(55 * scaleBoost, 24, 24),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5,
+      blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  // Outer "lens flare" sprite — huge soft falloff that always faces camera
+  const outerMat = new THREE.SpriteMaterial({
+    map: makeRadialTexture(color),
+    color, transparent: true, opacity: 0.75,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const outer = new THREE.Sprite(outerMat);
+  outer.scale.set(220 * scaleBoost, 220 * scaleBoost, 1);
+
+  inner.position.set(node.x, node.y, node.z);
+  mid.position.set(node.x, node.y, node.z);
+  outer.position.set(node.x, node.y, node.z);
+  scene.add(inner); scene.add(mid); scene.add(outer);
+
+  const now = performance.now();
+  halos.push({ mesh: inner, start: now, duration: ms,       target: node, kind: 'halo-inner' });
+  halos.push({ mesh: mid,   start: now, duration: ms + 200, target: node, kind: 'halo-mid' });
+  halos.push({ mesh: outer, start: now, duration: ms + 400, target: node, kind: 'halo-outer-sprite', material: outerMat });
+}
+
+function pulseNodeArrival(node, agent) {
+  // Bigger, more dramatic flash than the source pre-flash
+  flashNode(node, agent, 900, 1.3);
+}
+
+// Ambient idle firing — random sparks at brisk cadence so the graph is
+// constantly active even when no curator run is happening.
+function startFiringLoop() {
+  const fireAmbient = (agent) => {
+    const from = pickRandomVisibleNode();
+    if (!from) return;
+    const to = pickConnectedNeighbor(from);
+    if (!to) return;
+    spawnFiring(agent, from, to);
+  };
+  setInterval(() => fireAmbient('cleaner'),  650);
+  setInterval(() => fireAmbient('verifier'), 950);
+}
+
+// Auto-curate is driven by the SERVER (background loop). Client polls
+// /api/curator-runs every 4s; when a new run_id appears, animate its
+// decisions on the actual mutated nodes.
+
+let lastSeenRunId = null;
+let animatingRun = false;
+
+async function pollCuratorState() {
+  try {
+    const r = await fetch('/api/curator-runs');
+    const d = await r.json();
+    updateAutoStatus(d.auto);
+    renderRunsList(d.runs || []);
+
+    // Find the newest run we haven't animated yet
+    const newest = (d.runs || [])[0];  // server returns reverse-chrono
+    if (newest && newest.id !== lastSeenRunId && !animatingRun) {
+      // First poll on load just initializes — don't replay history
+      if (lastSeenRunId === null) {
+        lastSeenRunId = newest.id;
+      } else {
+        await animateRun(newest);
+        lastSeenRunId = newest.id;
+        // Refresh graph data so newly created gap-beliefs / lowered strengths appear
+        await refreshGraph();
+      }
+    }
+  } catch {}
+}
+
+function updateAutoStatus(auto) {
+  if (!auto) return;
+  const label = document.getElementById('auto-state-label');
+  const next = document.getElementById('auto-state-next');
+  if (auto.state === 'running') {
+    label.textContent = 'curating…';
+    label.style.color = 'var(--c-cleaner)';
+    next.textContent = '';
+  } else {
+    label.textContent = 'auto';
+    label.style.color = 'var(--dim)';
+    const s = Math.ceil(auto.msUntilNext / 1000);
+    next.textContent = s > 0 ? `next in ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}` : '';
+  }
+  if (auto.lastError) {
+    document.getElementById('curate-summary').textContent = 'last error: ' + auto.lastError;
+  }
+}
+
+async function animateRun(run) {
+  animatingRun = true;
+  const decisions = run.decisions || [];
+  document.getElementById('curate-summary').innerHTML =
+    `<span style="color:var(--text)">[run ${run.id.slice(0,8)}]</span> `
+    + `${run.examined} examined · `
+    + `${run.confirmed ?? 0}✓ ${run.unclear ?? 0}? ${run.ambiguous ?? 0}~ ${run.skipped ?? 0}–`;
+
+  const nodeById = new Map(allData.nodes.map(n => [n.id, n]));
+  const stepMs = Math.max(220, Math.min(800, 6000 / Math.max(1, decisions.length)));
+
+  for (let i = 0; i < decisions.length; i++) {
+    const dec = decisions[i];
+    const node = nodeById.get(dec.ref);
+    if (!node || typeof node.x !== 'number') {
+      await new Promise(r => setTimeout(r, stepMs));
+      continue;
+    }
+    let agent;
+    if (dec.decision === 'confirm') agent = 'verifier';
+    else if (dec.decision === 'unclear' || dec.decision === 'ambiguous') agent = 'cleaner';
+    else agent = null;
+
+    if (agent) {
+      const target = pickConnectedNeighbor(node) || node;
+      if (target === node) flashNode(node, agent, 700);
+      else spawnFiring(agent, node, target);
+      setAgentStatus(agent, `${dec.decision} · ${(dec.ref || '').slice(0, 30)}`);
+    } else {
+      setAgentStatus('cleaner', `skip · ${(dec.ref || '').slice(0, 30)}`);
+    }
+    await new Promise(r => setTimeout(r, stepMs));
+  }
+  setAgentStatus('cleaner', 'idle');
+  setAgentStatus('verifier', 'idle');
+  animatingRun = false;
+}
+
+async function refreshGraph() {
+  // Pull updated KG so any new gap-beliefs / changed strengths land in the
+  // graph. Cheap relative to a full reload — the layout doesn't reset.
+  try {
+    const r = await fetch('/api/graph');
+    const data = await r.json();
+    allData = data;
+    applyFilter();
+    document.getElementById('total-all').textContent = data.nodes.length;
+    // Update per-layer counts
+    const counts = {};
+    for (const n of data.nodes) counts[n.group] = (counts[n.group] || 0) + 1;
+    document.querySelectorAll('[data-count]').forEach(el => {
+      el.textContent = counts[el.dataset.count] ?? 0;
+    });
+  } catch {}
+}
+
+function renderRunsList(runs) {
+  const root = document.getElementById('curator-runs');
+  root.innerHTML = '';
+  for (const run of runs.slice(0, 6)) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; gap:4px; padding:1px 0; align-items:center;';
+    const at = new Date(run.at).toLocaleTimeString();
+    row.innerHTML = `<span style="flex:1;">${at} · ${run.confirmed}✓ ${run.unclear}? ${run.ambiguous}~ ${run.skipped}–</span>`;
+    const btn = document.createElement('button');
+    btn.textContent = 'revert';
+    btn.style.cssText = 'font:inherit; font-size:9px; padding:1px 4px; background:rgba(255,255,255,0.05); border:1px solid var(--line); color:var(--dim); border-radius:2px; cursor:pointer;';
+    btn.addEventListener('click', () => revertRun(run.id));
+    row.appendChild(btn);
+    root.appendChild(row);
+  }
+}
+
+async function revertRun(runId) {
+  if (!confirm(`Revert curator run ${runId.slice(0, 8)}? Restores affected facts to pre-curator state.`)) return;
+  try {
+    const r = await fetch('/api/curate-revert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ run_id: runId }),
+    });
+    const d = await r.json();
+    if (d.error) {
+      document.getElementById('curate-summary').textContent = 'revert error: ' + (d.message || d.error);
+      return;
+    }
+    document.getElementById('curate-summary').textContent =
+      `reverted ${d.reverted} actions · ${d.gapBeliefsFlagged} gap-beliefs flagged`;
+    await refreshGraph();
+    pollCuratorState();
+  } catch (err) {
+    document.getElementById('curate-summary').textContent = 'revert fetch error: ' + err.message;
+  }
+}
+
+// Kick off polling — runs every 4s. The server's auto-curate loop will
+// produce a new run every ~2 min and the client animates it on detection.
+pollCuratorState();
+setInterval(pollCuratorState, 4000);
+
+// Main per-frame loop: move traveling signals + lightning arcs + node halos.
+function startTickLoop() {
+  function tick() {
+    const now = performance.now();
+
+    // Traveling signal particles (each fire spawns several, staggered)
+    for (let i = fires.length - 1; i >= 0; i--) {
+      const f = fires[i];
+      if (now < f.start) continue; // staggered launch
+      const t = (now - f.start) / f.duration;
+      const from = f.from, to = f.to;
+      if (typeof from.x !== 'number' || typeof to.x !== 'number') {
+        scene.remove(f.mesh); fires.splice(i, 1); continue;
+      }
+      if (t >= 1) {
+        if (f.onArrival) pulseNodeArrival(to, f.onArrival);
+        scene.remove(f.mesh);
+        f.mesh.material.dispose();
+        f.mesh.geometry.dispose();
+        fires.splice(i, 1);
+        continue;
+      }
+      // Quadratic Bezier midpoint with sideways offset for arc shape
+      const mx = (from.x + to.x) / 2;
+      const my = (from.y + to.y) / 2 + 12;
+      const mz = (from.z + to.z) / 2 + 12;
+      const u = 1 - t;
+      f.mesh.position.x = u * u * from.x + 2 * u * t * mx + t * t * to.x;
+      f.mesh.position.y = u * u * from.y + 2 * u * t * my + t * t * to.y;
+      f.mesh.position.z = u * u * from.z + 2 * u * t * mz + t * t * to.z;
+      // Bright at midpoint, fade as it lands
+      f.mesh.material.opacity = 1 - 0.4 * Math.abs(t - 0.5) * 2;
+      f.mesh.scale.setScalar(1 + Math.sin(t * Math.PI) * 0.6);
+    }
+
+    // Halos / arcs — expand + fade
+    for (let i = halos.length - 1; i >= 0; i--) {
+      const h = halos[i];
+      const t = (now - h.start) / h.duration;
+      if (t >= 1) {
+        scene.remove(h.mesh);
+        h.mesh.material?.dispose?.();
+        h.mesh.geometry?.dispose?.();
+        halos.splice(i, 1);
+        continue;
+      }
+      if (h.kind === 'arc') {
+        // Energy beam: fade out, no scale
+        h.material.opacity = 0.85 * (1 - t) ** 1.4;
+      } else if (h.target && typeof h.target.x === 'number') {
+        // Track the moving node
+        h.mesh.position.set(h.target.x, h.target.y, h.target.z);
+        if (h.kind === 'halo-inner') {
+          h.mesh.scale.setScalar(1 + t * 1.4);
+          h.mesh.material.opacity = 0.95 * (1 - t);
+        } else if (h.kind === 'halo-mid') {
+          h.mesh.scale.setScalar(1 + t * 2.0);
+          h.mesh.material.opacity = 0.4 * (1 - t);
+        } else if (h.kind === 'halo-outer-sprite') {
+          // Sprite uses its own scale (always camera-facing)
+          const s = (1 + t * 1.8);
+          h.mesh.scale.setScalar(220 * s);
+          h.material.opacity = 0.75 * (1 - t) ** 1.2;
+        } else {
+          h.mesh.scale.setScalar(1 + t * 2.6);
+          h.mesh.material.opacity = 0.35 * (1 - t);
+        }
+      }
+    }
+
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ─── Detail panel + chat (unchanged from prev iter) ────────────────────────
+async function showDetail(node) {
+  document.getElementById('detail').classList.add('open');
+  document.getElementById('detail-title').textContent = node.label || node.id;
+  document.getElementById('detail-id').textContent = `${node.layer ?? ''} · ${node.id}`;
+  const fields = document.getElementById('detail-fields');
+  fields.innerHTML = '';
+  const add = (k, v) => {
+    if (v === undefined || v === null || v === '') return;
+    const dt = document.createElement('dt'); dt.textContent = k;
+    const dd = document.createElement('dd'); dd.textContent = String(v);
+    fields.appendChild(dt); fields.appendChild(dd);
+  };
+  add('layer', node.layer);
+  add('type', node.group);
+  add('subject', node.subject);
+  add('strength', node.strength?.toFixed?.(2));
+  add('claim', node.claim);
+  add('description', node.description);
+  add('context', node.context);
+  add('lens', node.lens);
+  add('question', node.question);
+  add('evidence', node.evidence_count);
+  add('origin', node.origin);
+  add('confidence', node.confidence?.toFixed?.(2));
+  add('mechanics', node.mechanics);
+  add('hypothesis', node.hypothesis);
+  add('gap', node.gap);
+  add('cold-start', node.is_cold_start ? 'yes' : undefined);
+  add('challenge_candidate', node.challenge ? 'yes' : undefined);
+  add('source', node.source);
+  add('source_date', node.source_date);
+
+  try {
+    const r = await fetch('/api/node/' + encodeURIComponent(node.id));
+    if (r.ok) {
+      const d = await r.json();
+      document.getElementById('detail-raw').textContent = JSON.stringify(d.fact, null, 2);
+    } else {
+      document.getElementById('detail-raw').textContent = '(no raw record)';
+    }
+  } catch {
+    document.getElementById('detail-raw').textContent = '(error fetching)';
+  }
+}
+
+document.querySelector('#detail .close').addEventListener('click', () => {
+  document.getElementById('detail').classList.remove('open');
+});
+
+const chatLog = document.getElementById('chat-log');
+const chatForm = document.getElementById('chat-input');
+const chatText = document.getElementById('chat-text');
+
+function appendMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = (role === 'user' ? '› ' : '') + text;
+  chatLog.appendChild(div);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+chatForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = chatText.value.trim();
+  if (!msg) return;
+  chatText.value = '';
+  appendMsg('user', msg);
+  const btn = chatForm.querySelector('button');
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg }),
+    });
+    const d = await r.json();
+    appendMsg('assistant', d.reply || d.error || '(empty)');
+  } catch (err) {
+    appendMsg('assistant', '(network error: ' + err.message + ')');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'send';
+  }
+});
+
+init().catch(err => {
+  document.getElementById('loading').textContent = 'failed to load KG: ' + err.message;
+});
+</script>
+</body>
+</html>
